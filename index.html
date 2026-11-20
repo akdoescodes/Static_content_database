@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101522">
+  <title>Somewhere in the Clouds</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100svh; color: #fff; overflow: hidden;
+      background: #101522 url("https://raw.githubusercontent.com/akdoescodes/Static_content_database/main/Nostalgic%20Computer%20Beneath%20Endless%20Clouds%20(1).png") center / cover no-repeat fixed;
+    }
+    body::before { content: none; }
+
+    /* Video overlay layer */
+    .video-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+    .video-overlay.is-active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .video-overlay video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* 3D GLB Canvas Overlay */
+    #knifeCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* Sun glint off the blade's RIGHT EDGE: a hot sliver of light along the edge,
+       a soft blinding glare with hazy sun rays around it, and a screen-wide wash */
+    .edge-glint {
+      position: fixed; left: 0; top: 0; width: 8px; height: 0;
+      z-index: 6; pointer-events: none; opacity: 0;
+      mix-blend-mode: screen; transform-origin: 50% 0; will-change: transform, opacity, height;
+      border-radius: 8px;
+      background: linear-gradient(180deg,
+        rgba(255,240,200,0) 0%, rgba(255,252,240,1) 22%, #fff 40%,
+        rgba(255,246,222,.95) 70%, rgba(255,222,160,0) 100%);
+      filter: blur(1.2px);
+    }
+    .edge-glint::before {           /* bloom hugging the edge */
+      content: ""; position: absolute; left: -34px; right: -34px; top: -6%; bottom: -6%;
+      border-radius: 50%;
+      background: linear-gradient(180deg,
+        rgba(255,226,160,0) 0%, rgba(255,232,180,.85) 30%, rgba(255,226,170,.75) 65%, rgba(255,210,140,0) 100%);
+      filter: blur(18px);
+    }
+    .sun-glare {
+      position: fixed; left: 0; top: 0; width: 0; height: 0;
+      z-index: 6; pointer-events: none; opacity: 0;
+      mix-blend-mode: screen; will-change: transform, opacity;
+    }
+    .sun-glare > div { position: absolute; border-radius: 50%; }
+    .sun-glare .core {              /* slightly tall: the light comes off a long edge */
+      width: 440px; height: 680px; left: -220px; top: -340px;
+      background: radial-gradient(ellipse at center,
+        #fff 0%, rgba(255,250,232,.95) 7%, rgba(255,228,175,.6) 20%,
+        rgba(255,198,125,.2) 42%, rgba(255,185,105,0) 68%);
+    }
+    .sun-glare .haze {
+      width: 2000px; height: 2000px; left: -1000px; top: -1000px;
+      background: radial-gradient(circle,
+        rgba(255,238,200,.6) 0%, rgba(255,216,152,.32) 22%, rgba(255,202,132,.1) 48%, rgba(255,190,120,0) 70%);
+    }
+    .sun-glare .shafts {            /* a few broad, hazy sun rays (soft, not a sharp star) */
+      width: 2600px; height: 2600px; left: -1300px; top: -1300px; opacity: .7;
+      background: conic-gradient(from 14deg,
+        rgba(255,238,200,0) 0deg,   rgba(255,238,200,.5) 10deg,  rgba(255,238,200,0) 24deg,
+        rgba(255,238,200,0) 58deg,  rgba(255,230,185,.32) 70deg, rgba(255,230,185,0) 86deg,
+        rgba(255,230,185,0) 120deg, rgba(255,240,205,.45) 131deg, rgba(255,240,205,0) 146deg,
+        rgba(255,240,205,0) 178deg, rgba(255,226,175,.3) 194deg, rgba(255,226,175,0) 212deg,
+        rgba(255,226,175,0) 238deg, rgba(255,238,200,.42) 250deg, rgba(255,238,200,0) 263deg,
+        rgba(255,238,200,0) 296deg, rgba(255,232,190,.3) 310deg, rgba(255,232,190,0) 328deg,
+        rgba(255,232,190,0) 360deg);
+      filter: blur(26px);
+      -webkit-mask: radial-gradient(circle, #000 0%, rgba(0,0,0,.6) 18%, transparent 56%);
+              mask: radial-gradient(circle, #000 0%, rgba(0,0,0,.6) 18%, transparent 56%);
+    }
+    .sun-flash {
+      position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0;
+      mix-blend-mode: screen;
+      background: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%),
+        rgba(255,252,238,1) 0%, rgba(255,236,192,.9) 9%, rgba(255,218,158,.55) 26%,
+        rgba(255,205,140,.3) 50%, rgba(255,198,132,.18) 100%);
+    }
+
+    /* Song timeline: thin white ruler on the right; scroll / drag to scrub song + knife together */
+    .timeline {
+      position: fixed; right: clamp(8px, 2vw, 28px); top: 50%; transform: translateY(-50%);
+      width: 104px; height: 58vh; z-index: 7;
+      cursor: ns-resize; touch-action: none; user-select: none;
+      opacity: .8; transition: opacity .3s ease;
+      -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
+              mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
+    }
+    .timeline:hover, .timeline.is-scrubbing { opacity: 1; }
+    .timeline canvas { display: block; width: 100%; height: 100%; }
+
+    /* Background dimmer: sits above the painting but BELOW the dagger, text and flash,
+       so only the background darkens while the knife is on screen */
+    .bg-dim {
+      position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+      background: radial-gradient(ellipse at 50% 55%, rgba(4,6,12,.82) 0%, rgba(4,6,12,1) 100%);
+      will-change: opacity;
+    }
+
+    .grain { position: fixed; inset: 0; pointer-events: none; opacity: .11; z-index: 2;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+    }
+    main { min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; padding: clamp(22px, 5vw, 64px); position: relative; z-index: 3; }
+    header, footer { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+    .eyebrow { font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: rgba(255,255,255,.72); }
+    .controls { display: flex; align-items: center; gap: 10px; }
+    .mark {
+      width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.65);
+      border-radius: 50%; display:grid; place-items:center; font-size:17px;
+      color: white; background: rgba(12,18,30,.18); cursor:pointer;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      transition: transform .35s ease, background .35s ease, border-color .35s ease;
+    }
+    .mark:hover { transform: rotate(90deg) scale(1.08); background: rgba(255,255,255,.18); }
+    .mark:focus-visible { outline: 2px solid white; outline-offset: 4px; }
+    .hero {
+      align-self:center; max-width: 760px; padding: clamp(24px, 5vw, 54px);
+      margin-left: clamp(0px, 6vw, 90px);
+      border: 1px solid rgba(255,255,255,.23); border-radius: 28px;
+      background: rgba(255,255,255,.075); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 24px 80px rgba(0,0,0,.18);
+      opacity: 1; transform: translateY(0) scale(1);
+      transition: opacity .55s ease, transform .65s cubic-bezier(.2,.8,.2,1), visibility .55s;
+    }
+    .hero.is-hidden {
+      opacity: 0; transform: translateY(18px) scale(.97);
+      visibility: hidden; pointer-events: none;
+    }
+    .hero .kicker { color: #d9e8f7; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; }
+    h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: clamp(48px, 8vw, 104px); line-height: .96; letter-spacing: -.055em; margin: 22px 0; text-wrap: balance; }
+    .sub { max-width: 430px; color: rgba(255,255,255,.78); font-size: clamp(14px, 1.5vw, 17px); line-height: 1.8; }
+    .glass-row { display:flex; flex-wrap:wrap; gap:10px; margin-top:32px; }
+    .pill { padding: 10px 15px; border:1px solid rgba(255,255,255,.25); border-radius:999px; background:rgba(255,255,255,.07); color:rgba(255,255,255,.85); font-size:11px; letter-spacing:.08em; backdrop-filter:blur(12px); }
+    footer { color:rgba(255,255,255,.65); font-size:10px; letter-spacing:.18em; text-transform:uppercase; }
+    @media (max-width:600px) { main { padding:22px; } .hero { margin:0; border-radius:22px; } footer { align-items:flex-end; } }
+  </style>
+
+  <!-- Import Map for Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="video-overlay" id="cloudVideoOverlay" aria-hidden="true">
+    <video
+      id="cloudVideo"
+      src="https://raw.githubusercontent.com/akdoescodes/Static_content_database/main/Animate_image_into_video_98c16406.mp4"
+      muted
+      playsinline
+      preload="auto"
+    ></video>
+  </div>
+
+  <div class="bg-dim" id="bgDim" aria-hidden="true"></div>
+
+  <!-- Transparent WebGL Layer for Thorfinn's Knife -->
+  <canvas id="knifeCanvas"></canvas>
+
+  <!-- Sun glint thrown off the blade toward the viewer -->
+  <div class="sun-flash" id="sunFlash" aria-hidden="true"></div>
+  <div class="edge-glint" id="edgeGlint" aria-hidden="true"></div>
+  <div class="sun-glare" id="sunGlare" aria-hidden="true">
+    <div class="haze"></div>
+    <div class="shafts"></div>
+    <div class="core"></div>
+  </div>
+
+  <audio
+    id="bgAudio"
+    src="https://raw.githubusercontent.com/akdoescodes/Static_content_database/main/%E1%83%A9%E1%83%A3%E1%83%91%E1%83%98%E1%83%9C%E1%83%90%20-%20chub1na.ge%20%5Bedit%20audio%5D.mp3"
+    preload="auto"
+  ></audio>
+
+  <div class="grain"></div>
+  <main>
+    <header>
+      <div class="eyebrow">A little somewhere else</div>
+      <div class="controls">
+        <button class="mark" id="replayKnife" type="button" aria-label="Replay knife drop" title="Replay 3D knife drop">🗡️</button>
+        <button class="mark" id="audioToggle" type="button" aria-label="Toggle audible audio" title="Play/Mute audible audio">🔊</button>
+        <button class="mark" id="panelToggle" type="button" aria-label="Hide text panel" aria-controls="introPanel" aria-expanded="true" title="Show or hide the text panel">✳</button>
+      </div>
+    </header>
+    <section class="hero" id="introPanel">
+      <div class="kicker">An archive of quiet moments</div>
+      <h1>Somewhere<br>in the clouds.</h1>
+      <p class="sub">A softer kind of nostalgia — where old machines, open skies, and unfinished thoughts drift together.</p>
+      <div class="glass-row">
+        <span class="pill">MEMORIES, REBOOTED</span>
+        <span class="pill">TAKE YOUR TIME</span>
+      </div>
+    </section>
+    <footer>
+      <span>Stay a little longer</span>
+      <span>Vol. 001 &nbsp;·&nbsp; Endless blue</span>
+    </footer>
+  </main>
+
+  <div class="timeline" id="timeline" role="slider" aria-label="Song timeline: scroll or drag to scrub"
+       title="Scroll / drag to scrub · double-click to jump to the knife drop">
+    <canvas></canvas>
+  </div>
+
+  <!-- Original UI & Audio Logic -->
+  <script>
+    const toggle = document.getElementById("panelToggle");
+    const panel = document.getElementById("introPanel");
+    const audio = document.getElementById("bgAudio");
+    const audioToggle = document.getElementById("audioToggle");
+    const videoOverlay = document.getElementById("cloudVideoOverlay");
+    const video = document.getElementById("cloudVideo");
+
+    const LAST_SECONDS_WINDOW = 7;
+    let videoTriggered = false;
+    let sequenceCompleted = false;
+
+    toggle.addEventListener("click", () => {
+      const hidden = panel.classList.toggle("is-hidden");
+      toggle.setAttribute("aria-expanded", String(!hidden));
+      toggle.setAttribute("aria-label", hidden ? "Show text panel" : "Hide text panel");
+    });
+
+    async function ensureAudiblePlay() {
+      if (sequenceCompleted) return;
+      audio.muted = false;
+      audio.volume = 1.0;
+      try {
+        await audio.play();
+        audioToggle.textContent = "🔊";
+      } catch (_) {
+        audioToggle.textContent = "🔇";
+      }
+    }
+
+    function showVideoOverlay() {
+      if (videoTriggered) return;
+      videoTriggered = true;
+      videoOverlay.classList.add("is-active");
+      videoOverlay.setAttribute("aria-hidden", "false");
+      video.currentTime = 0;
+      video.play().catch(() => {});
+    }
+
+    function endBothTogether() {
+      if (sequenceCompleted) return;
+      sequenceCompleted = true;
+
+      audio.pause();
+      audio.currentTime = 0;
+
+      video.pause();
+      videoOverlay.classList.remove("is-active");
+      videoOverlay.setAttribute("aria-hidden", "true");
+    }
+
+    audio.addEventListener("timeupdate", () => {
+      if (sequenceCompleted) return;
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      const remaining = audio.duration - audio.currentTime;
+      if (!videoTriggered && remaining <= LAST_SECONDS_WINDOW) {
+        showVideoOverlay();
+      }
+    });
+
+    audio.addEventListener("ended", endBothTogether);
+
+    audioToggle.addEventListener("click", async () => {
+      if (sequenceCompleted) {
+        sequenceCompleted = false;
+        videoTriggered = false;
+        audio.currentTime = 0;
+        await ensureAudiblePlay();
+        return;
+      }
+      if (audio.paused) {
+        await ensureAudiblePlay();
+      } else {
+        audio.muted = !audio.muted;
+        audioToggle.textContent = audio.muted ? "🔇" : "🔊";
+      }
+    });
+
+    ensureAudiblePlay();
+    const unlockOnce = () => {
+      if (!sequenceCompleted && (audio.paused || audio.muted)) {
+        ensureAudiblePlay();
+      }
+    };
+    window.addEventListener("pointerdown", unlockOnce, { once: true });
+    window.addEventListener("keydown", unlockOnce, { once: true });
+  </script>
+
+  <!-- Song timeline ruler: scroll / drag to scrub the song (the knife drop follows the song clock) -->
+  <script>
+    (() => {
+      const el = document.getElementById("timeline");
+      const cv = el.querySelector("canvas");
+      const ctx = cv.getContext("2d");
+      const PX_PER_S = 34;          // ruler scale
+      let pendingSeek = null;       // coalesce many wheel/drag events into one seek per frame
+      let dragging = false;
+      let lastY = 0;
+
+      const duration = () => (Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 180);
+      const nowT = () => (pendingSeek !== null ? pendingSeek : audio.currentTime);
+      const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+      const fmtFine = (t) => `${fmt(t)}.${Math.floor((t % 1) * 10)}`;
+
+      function seekTo(t) {
+        pendingSeek = Math.min(Math.max(0, t), duration() - 0.05);
+      }
+
+      function applySeek() {
+        if (pendingSeek === null) return;
+        const t = pendingSeek;
+        pendingSeek = null;
+        audio.currentTime = t;
+        sequenceCompleted = false;
+        // Keep the end-of-song video consistent with where we scrubbed to
+        const remaining = duration() - t;
+        if (remaining > LAST_SECONDS_WINDOW) {
+          if (videoTriggered) {
+            videoTriggered = false;
+            video.pause();
+            videoOverlay.classList.remove("is-active");
+            videoOverlay.setAttribute("aria-hidden", "true");
+          }
+        } else {
+          if (!videoTriggered) showVideoOverlay();
+          video.currentTime = Math.max(0, LAST_SECONDS_WINDOW - remaining);
+          if (audio.paused) video.pause();
+        }
+      }
+
+      function line(x1, y1, x2, y2) {
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+
+      function draw() {
+        applySeek();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = el.clientWidth, h = el.clientHeight;
+        if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+          cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        // Soft dark halo so the thin white ticks stay readable over the bright clouds
+        ctx.shadowColor = "rgba(0,0,0,.45)";
+        ctx.shadowBlur = 3;
+
+        const now = nowT(), D = duration();
+        const cy = Math.round(h / 2) + 0.5;           // playhead
+        const spineX = w - 6.5;
+        const yOf = (t) => cy + (t - now) * PX_PER_S;  // future scrolls up from below
+        const tMin = Math.max(0, now - h / 2 / PX_PER_S);
+        const tMax = Math.min(D, now + h / 2 / PX_PER_S);
+
+        // Spine
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(255,255,255,.28)";
+        line(spineX + 0.5, yOf(tMin), spineX + 0.5, yOf(tMax));
+
+        // Knife cue: drop -> flash end (warm), flash peak (dot)
+        const cue = window.__knifeCue;
+        if (cue) {
+          ctx.strokeStyle = "rgba(255,176,80,.95)";
+          ctx.lineWidth = 2;
+          line(spineX + 4, yOf(cue.start), spineX + 4, yOf(cue.end));
+          ctx.fillStyle = "#ffd28a";
+          ctx.beginPath(); ctx.arc(spineX + 4, yOf(cue.peak), 3, 0, Math.PI * 2); ctx.fill();
+          if (cue.beat) {   // beat change: hollow ring
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(spineX + 4, yOf(cue.beat), 3.4, 0, Math.PI * 2); ctx.stroke();
+          }
+          ctx.lineWidth = 1;
+        }
+
+        // Ticks every 0.25 s; longer each 0.5 s / 1 s; labelled every 5 s
+        ctx.font = "9px Inter, ui-sans-serif, system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (let i = Math.ceil(tMin * 4); i <= Math.floor(tMax * 4); i++) {
+          const t = i / 4;
+          const y = Math.round(yOf(t)) + 0.5;
+          let len = 4, a = 0.32;
+          if (i % 2 === 0) { len = 7; a = 0.48; }
+          if (i % 4 === 0) { len = 11; a = 0.7; }
+          if (i % 20 === 0) { len = 18; a = 0.95; }
+          ctx.strokeStyle = `rgba(255,255,255,${a})`;
+          line(spineX - len, y, spineX, y);
+          if (i % 20 === 0 && Math.abs(y - cy) > 22) {
+            ctx.fillStyle = "rgba(255,255,255,.7)";
+            ctx.fillText(fmt(t), spineX - 23, y);
+          }
+        }
+
+        // Playhead + precise readout
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        line(spineX - 30, cy, spineX + 7, cy);
+        ctx.fillStyle = "#fff";
+        ctx.font = "500 10px Inter, ui-sans-serif, system-ui, sans-serif";
+        ctx.fillText(fmtFine(now), spineX - 35, cy);
+
+        el.setAttribute("aria-valuenow", now.toFixed(1));
+        requestAnimationFrame(draw);
+      }
+
+      // Scroll wheel / trackpad: down = later in the song
+      el.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+        seekTo(nowT() + e.deltaY * unit * 0.01);
+      }, { passive: false });
+
+      // Drag the tape: pull up = later, pull down = earlier
+      el.addEventListener("pointerdown", (e) => {
+        dragging = true;
+        lastY = e.clientY;
+        el.setPointerCapture(e.pointerId);
+        el.classList.add("is-scrubbing");
+      });
+      el.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const dy = e.clientY - lastY;
+        lastY = e.clientY;
+        seekTo(nowT() - dy / PX_PER_S);
+      });
+      const endDrag = () => { dragging = false; el.classList.remove("is-scrubbing"); };
+      el.addEventListener("pointerup", endDrag);
+      el.addEventListener("pointercancel", endDrag);
+
+      // Double-click: jump to 1 s before the knife drop, to watch it again
+      el.addEventListener("dblclick", () => {
+        const cue = window.__knifeCue;
+        if (cue) seekTo(cue.start - 1);
+      });
+
+      el.setAttribute("aria-valuemin", "0");
+      requestAnimationFrame(draw);
+    })();
+  </script>
+
+  <!-- Three.js 3D GLB Top-to-Bottom Speed-Ramp Drop + Point-Down Lock -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const canvas = document.getElementById('knifeCanvas');
+    const replayBtn = document.getElementById('replayKnife');
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.35;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 7);
+
+    // Lighting matched to the painting: golden sun on the RIGHT, in front (toward the viewer), like the lit clouds
+    const SUN_DIR = new THREE.Vector3(0.75, 0.25, 0.6).normalize();
+    const SUN_COLOR = new THREE.Color(0xffd9a0);
+
+    const hemiLight = new THREE.HemisphereLight(0xbcd8ff, 0x4a3a22, 0.6);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffd6a0, 3.9);
+    sunLight.position.copy(SUN_DIR).multiplyScalar(10);
+    scene.add(sunLight);
+
+    const skyRim = new THREE.DirectionalLight(0x8cc4ff, 1.3);
+    skyRim.position.set(-5, 2, -4); // cool sky edge on the shadow (left) side
+    scene.add(skyRim);
+
+    // Sky environment for the metal to reflect (otherwise a metallic blade renders near-black)
+    function buildSkyEnvironment() {
+      const envScene = new THREE.Scene();
+      const R = 50;
+      const geo = new THREE.SphereGeometry(R, 64, 32);
+      const pos = geo.attributes.position;
+      const top = new THREE.Color(0x1d5a96);
+      const horizon = new THREE.Color(0xf3dcb0);
+      const ground = new THREE.Color(0x9a7d4c); // sunlit golden field, so the lower blade stays bright
+      const glow = new THREE.Color(0xffd590);   // golden sunset glow
+      const sunDir = SUN_DIR;
+      const colors = [];
+      const c = new THREE.Color();
+      const d = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        d.fromBufferAttribute(pos, i).normalize();
+        const y = d.y;
+        if (y >= 0) c.copy(horizon).lerp(top, Math.pow(y, 0.6));
+        else c.copy(horizon).lerp(ground, Math.min(1, -y * 1.6));
+        // Broad golden lobe around the sun: this is what the flat of the blade reflects
+        const lobe = Math.pow(Math.max(0, d.dot(sunDir)), 7);
+        c.lerp(glow, Math.min(1, lobe * 1.1));
+        c.multiplyScalar(1 + lobe * 4.5);
+        colors.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      envScene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+
+      // Hot sun disc for the sharp golden glint along the edges
+      const sunDisc = new THREE.Mesh(
+        new THREE.SphereGeometry(3.5, 32, 16),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2a8).multiplyScalar(30) })
+      );
+      sunDisc.position.copy(sunDir).multiplyScalar(40);
+      envScene.add(sunDisc);
+
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const tex = pmrem.fromScene(envScene, 0.02).texture;
+      pmrem.dispose();
+      return tex;
+    }
+    scene.environment = buildSkyEnvironment();
+    scene.environmentIntensity = 1.05;
+
+    // ---- Knife timeline, in SONG SECONDS ----------------------------------------------------
+    //  13.1  knife enters from the top, spinning, and slows into slow-motion
+    //  15.1  spin done: blade vertical, flat face to the sun; it drifts and turns very slowly
+    //  15.8  BEAT CHANGE: fast turn right->left, the right edge swings round and flashes the sun
+    //        at the viewer, then everything goes fast: the knife accelerates out of frame
+    //  17.3  knife gone, flash fully faded
+    const DROP_START_S = 13.1;
+    const SPIN_SETTLE_S = 15.1;
+    const BEAT_S = 15.8;
+    const FAST_TURN_S = 0.35;                         // length of the fast turn
+    const FLASH_PEAK_S = BEAT_S + FAST_TURN_S * 0.9;  // edge flashes as the fast turn lands
+    const SEQ_END_S = 17.3;                           // flash faded + knife gone
+    const EXIT_S = SEQ_END_S - 0.1;                   // knife fully below the frame
+    const FLASH_RISE_S = 0.08;                        // light snaps on
+    const FLASH_FALL_S = (SEQ_END_S - FLASH_PEAK_S) / 3; // and fades out by SEQ_END_S
+
+    const START_Y = 6.0, BEAT_Y = -0.3, END_Y = -6.2; // knife heights: above frame, centre, below frame (taller knife)
+    const DRIFT_SHARE = 0.25;                         // part of the entry that is steady slow-mo drift
+
+    const MIRROR_YAW = Math.atan2(SUN_DIR.x, SUN_DIR.z + 1);  // face angle where sun -> viewer
+    const YAW_START = MIRROR_YAW + 0.32;   // turned toward the sun while spinning (flat face visible)
+    const SLOW_TURN = 0.14;                // gentle turn during the slow-mo (15.1 -> 15.8)
+    const YAW_END = -0.6;                  // after the fast turn: right edge toward the viewer
+    const POST_TURN_SPEED = 2.4;           // rad/s it keeps spinning round after the fast turn...
+    const POST_TURN_ACCEL = 3.0;           // ...and speeds up until it leaves the frame
+    const WIDTH_SCALE = 1.6;               // wider dagger across the flat (more room for the blade images)
+
+    // Blade image flashes: these images flash one after another "inside" the translucent blade.
+    // Hosted in the Static_content_database repo (knife_images/), so the page works from anywhere.
+    const BLADE_IMAGE_BASE = 'https://raw.githubusercontent.com/akdoescodes/Static_content_database/main/knife_images/';
+    const BLADE_IMAGES = [
+      '0.jpg', '1.jpg', '21.jpg', '4.webp', '7.jpg', '14.webp',
+      '9.jpg', '19.avif', '20.gif', '16.jpg', '10.webp',
+    ].map((f) => BLADE_IMAGE_BASE + f);
+    const IMG_SEQ_START_S = DROP_START_S;  // first image flashes in as the knife enters
+    const IMG_SEQ_END_S = BEAT_S;          // last one is gone before the fast turn + glare begin
+    const BLADE_IMAGE_OPACITY = 0.8;       // peak strength of each flash
+    // Blade image framing: FIT = zoomed out a little; the space above/below the picture is filled
+    // with a blurred, grainy glow of the image's own colours (set bladeFitMode = false to fill the blade)
+    const BLADE_IMAGE_FIT_ZOOM_OUT = 0.25; // 0 = fill the blade (crops a lot), 1 = whole image visible
+    const bladeFitMode = true;
+
+    // Shared shader uniforms for the blade's edge sheen + flash
+    const bladeFx = {
+      uGlint: { value: 0 },
+      uRim: { value: 1 },
+      uEdgeTopY: { value: 0 },              // world/view Y where the blade starts (keeps the flash off the pommel)
+      uSunColor: { value: SUN_COLOR.clone() },
+      uSunDir: { value: SUN_DIR.clone() },  // camera never rotates, so world dir == view dir
+      // Blade inlay image
+      uImg: { value: null },
+      uImgOn: { value: 0 },                 // 0 until the image has loaded
+      uImgOpacity: { value: BLADE_IMAGE_OPACITY },
+      uMeshToBlade: { value: new THREE.Matrix4() }, // mesh space -> blade frame (x = width, y = length)
+      uMeshToBladeN: { value: new THREE.Matrix3() }, // same, for normals (z = out of the flat face)
+      uImgRect: { value: new THREE.Vector4() },     // blade-frame rect the image covers: minX, minY, w, h
+      uBladeTopY: { value: 0 },             // blade-frame Y of the guard (image stays below it)
+    };
+
+    // Load the flash images in order (null until each one arrives; a missing one is just skipped)
+    const bladeTextures = BLADE_IMAGES.map(() => null);
+    const texLoader = new THREE.TextureLoader();
+    BLADE_IMAGES.forEach((url, i) => {
+      texLoader.load(url, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 4;
+        bladeTextures[i] = tex;
+      }, undefined, () => console.warn(`Blade image failed to load: ${url}`));
+    });
+
+    // "cover" fit of an image over the blade rectangle (crops instead of stretching)
+    const bladeRect = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    function fitBladeImage(tex) {
+      if (!tex || !tex.image || bladeRect.maxY === bladeRect.minY) return;
+      const bw = bladeRect.maxX - bladeRect.minX, bh = bladeRect.maxY - bladeRect.minY;
+      const imgAspect = tex.image.width / tex.image.height, bladeAspect = bw / bh;
+      // "cover" (fills the blade, crops) vs "contain" (whole image fits); blend between them
+      const coverScale = Math.max(bw / imgAspect, bh);          // image height when covering
+      const containScale = Math.min(bw / imgAspect, bh);        // image height when fully contained
+      const zoomOut = bladeFitMode ? BLADE_IMAGE_FIT_ZOOM_OUT : 0;
+      const h = coverScale * Math.pow(containScale / coverScale, zoomOut);
+      const w = h * imgAspect;
+      const cx = (bladeRect.minX + bladeRect.maxX) / 2, cy = (bladeRect.minY + bladeRect.maxY) / 2;
+      bladeFx.uImgRect.value.set(cx - w / 2, cy - h / 2, w, h);
+    }
+
+    // Which image is flashing at song time s, and how strongly (quick in, short hold, quick out)
+    function updateBladeImage(s) {
+      const n = BLADE_IMAGES.length;
+      const u = (s - IMG_SEQ_START_S) / (IMG_SEQ_END_S - IMG_SEQ_START_S) * n;
+      const idx = Math.floor(u);
+      const tex = idx >= 0 && idx < n ? bladeTextures[idx] : null;
+      if (!tex) { bladeFx.uImgOn.value = 0; return; }
+      const local = u - idx; // 0..1 within this image's slot
+      const pulse = THREE.MathUtils.smoothstep(local, 0, 0.18) * (1 - THREE.MathUtils.smoothstep(local, 0.72, 1));
+      if (bladeFx.uImg.value !== tex) { bladeFx.uImg.value = tex; fitBladeImage(tex); }
+      bladeFx.uImgOn.value = 1;
+      bladeFx.uImgOpacity.value = BLADE_IMAGE_OPACITY * pulse;
+    }
+
+    const edgeGlintEl = document.getElementById('edgeGlint');
+    const glareEl = document.getElementById('sunGlare');
+    const flashEl = document.getElementById('sunFlash');
+
+    // Finds the blade's right edge (top just under the guard, bottom where the tip starts tapering)
+    function measureRightEdge(obj) {
+      obj.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(obj);
+      const center = box.getCenter(new THREE.Vector3());
+      const BINS = 64;
+      const binH = (box.max.y - box.min.y) / BINS;
+      // Low-poly mesh, so probe the actual surface: shoot rays from the right at each height
+      const ray = new THREE.Raycaster();
+      const dirLeft = new THREE.Vector3(-1, 0, 0);
+      const maxX = new Array(BINS).fill(center.x);
+      for (let b = 0; b < BINS; b++) {
+        const y = box.min.y + (b + 0.5) * binH;
+        ray.set(new THREE.Vector3(box.max.x + 1, y, center.z), dirLeft);
+        const hit = ray.intersectObject(obj, true)[0];
+        if (hit) maxX[b] = hit.point.x;
+      }
+      // Guard = widest slice; the blade begins where it narrows below the guard (tip is at min Y)
+      let guard = 0;
+      for (let b = 0; b < BINS; b++) if (maxX[b] > maxX[guard]) guard = b;
+      let top = guard;
+      while (top > 1 && maxX[top] - center.x > (maxX[guard] - center.x) * 0.85) top--;
+      top = Math.max(1, top - 1);
+      const bladeHalf = maxX[top] - center.x;
+      let bottom = top;
+      while (bottom > 0 && maxX[bottom] - center.x > bladeHalf * 0.8) bottom--;
+      const y = (b) => box.min.y + (b + 0.5) * binH;
+      return {
+        top: new THREE.Vector3(maxX[top], y(top), center.z),
+        bottom: new THREE.Vector3(maxX[bottom + 1], y(bottom + 1), center.z),
+      };
+    }
+
+    // Principal axes of the mesh via PCA on its vertices:
+    // long = blade length, thin = blade thickness (normal of the flat face)
+    function principalAxes(object) {
+      object.updateMatrixWorld(true);
+      const v = new THREE.Vector3();
+      const pts = [];
+      object.traverse((o) => {
+        if (!o.isMesh) return;
+        const p = o.geometry.attributes.position;
+        const step = Math.max(1, Math.floor(p.count / 4000));
+        for (let i = 0; i < p.count; i += step) {
+          v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld);
+          pts.push(v.x, v.y, v.z);
+        }
+      });
+      const n = pts.length / 3;
+      let mx = 0, my = 0, mz = 0;
+      for (let i = 0; i < pts.length; i += 3) { mx += pts[i]; my += pts[i + 1]; mz += pts[i + 2]; }
+      mx /= n; my /= n; mz /= n;
+      let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+      for (let i = 0; i < pts.length; i += 3) {
+        const x = pts[i] - mx, y = pts[i + 1] - my, z = pts[i + 2] - mz;
+        xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+      }
+      const mul = (a) => new THREE.Vector3(
+        xx * a.x + xy * a.y + xz * a.z,
+        xy * a.x + yy * a.y + yz * a.z,
+        xz * a.x + yz * a.y + zz * a.z
+      );
+      // Power iteration for the dominant eigenvector (length)
+      const long = new THREE.Vector3(1, 1, 1).normalize();
+      for (let k = 0; k < 64; k++) long.copy(mul(long).normalize());
+      // Second axis (width): power iteration restricted to the plane perpendicular to `long`
+      const width = new THREE.Vector3(1, -1, 0.5);
+      width.addScaledVector(long, -width.dot(long)).normalize();
+      for (let k = 0; k < 64; k++) {
+        const w = mul(width);
+        w.addScaledVector(long, -w.dot(long));
+        width.copy(w.normalize());
+      }
+      // Third axis (thickness) is perpendicular to both
+      const thin = new THREE.Vector3().crossVectors(long, width).normalize();
+      return { long, thin };
+    }
+
+    let knifeRoot = null;
+    let knifeSpinGroup = null;
+    let knifeYawGroup = null;
+    let knifeWidthGroup = null;
+    const edgeTopLocal = new THREE.Vector3();    // right edge of the blade (width-group space)
+    const edgeBottomLocal = new THREE.Vector3();
+    let animStartTime = null;
+    const easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);
+
+    // Height at song time s: fast entry easing into a slow-mo drift until the beat,
+    // then accelerating straight down and out of frame (continuous speed at the beat)
+    const ENTRY_S = BEAT_S - DROP_START_S;
+    const DRIFT_SPEED = DRIFT_SHARE * (START_Y - BEAT_Y) / ENTRY_S;   // units/s at the beat
+    const FALL_S = EXIT_S - BEAT_S;
+    const FALL_ACCEL = 2 * ((BEAT_Y - END_Y) - DRIFT_SPEED * FALL_S) / (FALL_S * FALL_S);
+    function knifeY(s) {
+      if (s <= BEAT_S) {
+        const p = THREE.MathUtils.clamp((s - DROP_START_S) / ENTRY_S, 0, 1);
+        return THREE.MathUtils.lerp(START_Y, BEAT_Y, (1 - DRIFT_SHARE) * easeOutCubic(p) + DRIFT_SHARE * p);
+      }
+      const tau = s - BEAT_S;
+      return BEAT_Y - DRIFT_SPEED * tau - 0.5 * FALL_ACCEL * tau * tau;
+    }
+
+    // Remaining in-plane spin (1 -> 0): one full turn, settling vertical at SPIN_SETTLE_S
+    function remainingSpinAt(s) {
+      const p = THREE.MathUtils.clamp((s - DROP_START_S) / (SPIN_SETTLE_S - DROP_START_S), 0, 1);
+      return 1 - easeOutCubic(p);
+    }
+
+    // Turn of the flat face: hold -> slow turn (slow-mo) -> fast turn on the beat -> keeps turning
+    function knifeYawAt(s) {
+      const slow = THREE.MathUtils.smoothstep(s, SPIN_SETTLE_S, BEAT_S);
+      const fast = THREE.MathUtils.smoothstep(s, BEAT_S, BEAT_S + FAST_TURN_S);
+      const yaw = THREE.MathUtils.lerp(YAW_START - SLOW_TURN * slow, YAW_END, fast);
+      // After the fast turn lands (edge flash), it keeps spinning round, picking up speed to the end.
+      // tau^2/(tau+0.12) ramps the speed up smoothly from 0 instead of jerking into the spin.
+      const tau = Math.max(0, s - (BEAT_S + FAST_TURN_S));
+      return yaw - POST_TURN_SPEED * (tau * tau) / (tau + 0.12) - 0.5 * POST_TURN_ACCEL * tau * tau;
+    }
+
+    const loader = new GLTFLoader();
+    const glbUrl = 'https://raw.githubusercontent.com/akdoescodes/Static_content_database/main/thorfinns_knife%20(1).glb'; // 2K-texture version
+
+    loader.load(glbUrl, (gltf) => {
+      const model = gltf.scene;
+
+      // Center model on its bounding box so it spins cleanly around its center
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const targetSize = 5.1; // dagger length on screen
+      const scale = targetSize / maxDim;
+
+      model.scale.setScalar(scale);
+      model.position.sub(center.multiplyScalar(scale));
+
+      // Glossier, more reflective steel so the blade throws back the golden sun like polished metal.
+      // (Single material; metal vs. handle comes from its texture maps, these factors scale them.)
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((m) => {
+          if (!m.isMeshStandardMaterial) return;
+          m.roughness = 0.3;         // multiplies the roughness map -> sharper, brighter reflections
+          m.envMapIntensity = 2.2;   // stronger sky/sun reflection
+          // Metal-only extras: warm sun sheen on the edges/bevels + the glint flash
+          m.onBeforeCompile = (shader) => {
+            Object.assign(shader.uniforms, bladeFx);
+            // Blade-frame position (x = across the flat, y = along the length) for the inlay image
+            shader.vertexShader = shader.vertexShader
+              .replace('#include <common>', `#include <common>
+                uniform mat4 uMeshToBlade;
+                uniform mat3 uMeshToBladeN;
+                varying vec3 vBladePos;
+                varying vec3 vBladeNormal;`)
+              .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+                vBladeNormal = uMeshToBladeN * objectNormal;`)
+              .replace('#include <begin_vertex>', `#include <begin_vertex>
+                vBladePos = (uMeshToBlade * vec4(position, 1.0)).xyz;`);
+            shader.fragmentShader = shader.fragmentShader
+              .replace('#include <common>', `#include <common>
+                uniform float uGlint;
+                uniform float uRim;
+                uniform float uEdgeTopY;
+                uniform vec3 uSunColor;
+                uniform vec3 uSunDir;
+                uniform sampler2D uImg;
+                uniform float uImgOn;
+                uniform float uImgOpacity;
+                uniform vec4 uImgRect;
+                uniform float uBladeTopY;
+                varying vec3 vBladePos;
+                varying vec3 vBladeNormal;`)
+              .replace('#include <opaque_fragment>', `{
+                vec3 vDirFx = normalize(vViewPosition);
+                float ndvFx = clamp(abs(dot(normal, vDirFx)), 0.0, 1.0);
+                float rimFx = pow(1.0 - ndvFx, 2.5);                       // grazing surfaces = edges/bevels
+                float sunFx = clamp(dot(normal, uSunDir) * 0.5 + 0.5, 0.0, 1.0);
+                float metalFx = smoothstep(0.25, 0.75, metalnessFactor);    // blade + pommel only, not the grip
+
+                // Inlay image, faintly visible "inside" the translucent blade (blade only, not guard/grip/pommel).
+                // Fades toward grazing angles so the steel's surface reflection sits on top, like glass.
+                if (uImgOn > 0.5) {
+                  vec2 uvImg = (vBladePos.xy - uImgRect.xy) / uImgRect.zw;
+                  vec3 sharpImg = texture2D(uImg, uvImg).rgb;
+                  // Outside the picture (fit mode): extend it with a blurred, grainy "diffusion" of its own
+                  // edge colours (high mip level = heavy blur), so the blade never looks empty
+                  vec2 uvClamp = clamp(uvImg, 0.0, 1.0);
+                  float away = length(uvImg - uvClamp);
+                  vec3 diffuseImg = textureLod(uImg, uvClamp, min(4.5 + away * 10.0, 8.0)).rgb;
+                  float grain = fract(sin(dot(floor(vBladePos.xy * 900.0), vec2(12.9898, 78.233))) * 43758.5453);
+                  diffuseImg *= 0.88 + 0.24 * grain;
+                  vec2 insideImg = smoothstep(0.0, 0.07, uvImg) * smoothstep(1.0, 0.93, uvImg);
+                  vec3 imgCol = mix(diffuseImg, sharpImg, insideImg.x * insideImg.y);
+                  float inBlade = metalFx * smoothstep(uBladeTopY, uBladeTopY - 0.08, vBladePos.y);
+                  // Only the flat faces (normal along the blade's thickness axis), never the edges/bevels
+                  float flatFace = smoothstep(0.82, 0.96, abs(normalize(vBladeNormal).z));
+                  float aImg = uImgOpacity * inBlade * flatFace * (1.0 - rimFx);
+                  outgoingLight = mix(outgoingLight, imgCol * (1.1 + 0.5 * luminance(outgoingLight)), aImg); // brighter images
+                }
+                float rightFx = smoothstep(0.1, 0.6, normal.x);             // surfaces facing screen-right = right edge
+                float bladeOnly = smoothstep(uEdgeTopY + 0.12, uEdgeTopY - 0.04, -vViewPosition.y);
+                outgoingLight += uSunColor * metalFx * (
+                  rimFx * uRim * (0.25 + 1.4 * sunFx * sunFx) +             // shiny sunlit edges
+                  uGlint * bladeOnly * (0.18 + rightFx * (2.4 + 6.0 * rimFx)) // the right edge blazes, face only warms
+                );
+              }
+              #include <opaque_fragment>`);
+          };
+          m.needsUpdate = true;
+        });
+      });
+
+      // Inner group: exact base pose.
+      //  - blade length on screen-vertical, tip down (sign kept from the GLB's native orientation)
+      //  - flat face straight toward the viewer (+Z); the yaw group above turns it
+      const alignedModel = new THREE.Group();
+      alignedModel.add(model);
+      const { long, thin } = principalAxes(model);
+      const sy = long.clone().multiplyScalar(Math.sign(long.y) || 1);   // -> +Y
+      const sz = thin.clone().multiplyScalar(Math.sign(thin.z) || 1);   // -> +Z (face the camera)
+      const sx = new THREE.Vector3().crossVectors(sy, sz).normalize();
+      const toScreen = new THREE.Matrix4().makeBasis(sx, sy, sz).transpose();
+      alignedModel.quaternion.setFromRotationMatrix(toScreen);
+
+      // Right edge of the blade, where the flash comes from
+      const edge = measureRightEdge(alignedModel);
+      edgeTopLocal.copy(edge.top);
+      edgeBottomLocal.copy(edge.bottom);
+
+      // Blade frame for the inlay image: mesh -> aligned (blade) space, and the blade's rectangle
+      alignedModel.updateMatrixWorld(true);
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        bladeFx.uMeshToBlade.value.copy(o.matrixWorld);
+        bladeFx.uMeshToBladeN.value.getNormalMatrix(o.matrixWorld); // handles the GLB's non-uniform node scale
+      });
+      const alignedBox = new THREE.Box3().setFromObject(alignedModel);
+      const bladeCx = (alignedBox.min.x + alignedBox.max.x) / 2;
+      const bladeHalfW = edge.top.x - bladeCx;
+      Object.assign(bladeRect, {
+        minX: bladeCx - bladeHalfW, maxX: bladeCx + bladeHalfW,
+        minY: alignedBox.min.y, maxY: edge.top.y,
+      });
+      bladeFx.uBladeTopY.value = edge.top.y;
+      fitBladeImage(bladeFx.uImg.value);
+
+      // Width group: wider dagger across its flat, same length and thickness
+      knifeWidthGroup = new THREE.Group();
+      knifeWidthGroup.add(alignedModel);
+      knifeWidthGroup.scale.set(WIDTH_SCALE, 1, 1);
+
+      // Yaw group turns the flat face about the blade's own vertical axis (the edge-glint turn)
+      knifeYawGroup = new THREE.Group();
+      knifeYawGroup.add(knifeWidthGroup);
+      knifeYawGroup.rotation.y = YAW_START;
+
+      // Middle group performs the full rotation during the fall
+      knifeSpinGroup = new THREE.Group();
+      knifeSpinGroup.add(knifeYawGroup);
+
+      // Outer group handles top-to-bottom position
+      knifeRoot = new THREE.Group();
+      knifeRoot.add(knifeSpinGroup);
+      knifeRoot.visible = false;   // waits for its cue in the song
+      scene.add(knifeRoot);
+    });
+
+    function triggerDrop() {
+      if (!knifeRoot) return;
+      knifeRoot.visible = true;
+      animStartTime = performance.now();
+    }
+
+    replayBtn.addEventListener('click', triggerDrop);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const _top = new THREE.Vector3();
+    const _bot = new THREE.Vector3();
+
+    // Flash timing (song seconds): snaps on as the fast turn lands, fades out by SEQ_END_S
+    function flashEnvelope(s) {
+      const d = s - FLASH_PEAK_S;
+      const w = d < 0 ? FLASH_RISE_S : FLASH_FALL_S;
+      return Math.exp(-(d * d) / (2 * w * w));
+    }
+
+    function toScreen(v) {
+      v.project(camera);
+      return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+    }
+
+    function hideFlash() {
+      bladeFx.uGlint.value = 0;
+      bladeFx.uRim.value = 1;
+      edgeGlintEl.style.opacity = '0';
+      glareEl.style.opacity = '0';
+      flashEl.style.opacity = '0';
+    }
+
+    function updateGlint(s) {
+      const g = flashEnvelope(s);
+      if (g < 0.003) { hideFlash(); return; }
+
+      // Right edge of the blade in world space, then on screen
+      knifeRoot.updateMatrixWorld(true);
+      _top.copy(edgeTopLocal).applyMatrix4(knifeWidthGroup.matrixWorld);
+      _bot.copy(edgeBottomLocal).applyMatrix4(knifeWidthGroup.matrixWorld);
+      bladeFx.uEdgeTopY.value = _top.y;
+      bladeFx.uGlint.value = g;
+      bladeFx.uRim.value = 1 + g * 2.5;
+
+      const a = toScreen(_top.clone());
+      const b = toScreen(_bot.clone());
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy);
+      if (!Number.isFinite(len)) { hideFlash(); return; }
+      const angle = Math.atan2(-dx, dy);
+
+      // Hot sliver along the edge
+      edgeGlintEl.style.height = `${len}px`;
+      edgeGlintEl.style.transform = `translate(${a.x - 4}px, ${a.y}px) rotate(${angle}rad)`;
+      edgeGlintEl.style.opacity = String(Math.min(1, g * 1.3));
+
+      // Blinding glare + hazy rays from the upper part of the edge
+      const gx = a.x + dx * 0.3, gy = a.y + dy * 0.3;
+      glareEl.style.transform = `translate(${gx}px, ${gy}px) scale(${0.4 + 0.8 * g})`;
+      glareEl.style.opacity = String(Math.min(1, g * 1.1));
+
+      // Screen-wide wash: the eye gets blinded for a moment
+      flashEl.style.setProperty('--gx', `${gx}px`);
+      flashEl.style.setProperty('--gy', `${gy}px`);
+      flashEl.style.opacity = String(Math.pow(g, 1.5) * 0.9);
+    }
+
+    // ---- Sync to the song ----------------------------------------------------------------
+    // Everything runs on the song clock (song seconds), so it lines up with the beat at 15.8 s.
+    const bgAudio = document.getElementById('bgAudio');
+    // Shared with the timeline ruler so it can mark the knife moment
+    window.__knifeCue = { start: DROP_START_S, beat: BEAT_S, peak: FLASH_PEAK_S, end: SEQ_END_S };
+
+    // Background dimming: darkens steadily as the dagger comes in, holds at a low level while the
+    // images flash in the blade, then lifts back as the fast turn + edge flash hit.
+    const dimEl = document.getElementById('bgDim');
+    const DIM_MAX = 0.62;                  // how dark the background gets (0 = none, 1 = black)
+    const DIM_FULL_S = 14.8;               // reaches that level here, then holds
+    const DIM_RELEASE_END_S = FLASH_PEAK_S + 0.35; // fully lifted again just after the flash
+    let lastDim = -1;
+    function updateDim(s) {
+      let d = 0;
+      if (s !== null) {
+        const down = THREE.MathUtils.smoothstep(s, DROP_START_S, DIM_FULL_S);
+        const up = THREE.MathUtils.smoothstep(s, BEAT_S, DIM_RELEASE_END_S);
+        d = DIM_MAX * down * (1 - up);
+      }
+      if (Math.abs(d - lastDim) > 0.002) { dimEl.style.opacity = d.toFixed(3); lastDim = d; }
+    }
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+
+      // Which moment to show: manual replay (🗡️ button, own clock) or the song's clock
+      let s = null;
+      if (animStartTime !== null) {
+        s = DROP_START_S + (now - animStartTime) / 1000;
+        if (s >= SEQ_END_S) { animStartTime = null; s = null; }
+      } else {
+        // Song clock (also while paused, so scrubbing the timeline shows the exact pose)
+        const t = bgAudio.currentTime;
+        if (t >= DROP_START_S && t < SEQ_END_S) s = t;
+      }
+
+      updateDim(s);
+
+      if (knifeRoot && s === null && knifeRoot.visible) {
+        knifeRoot.visible = false;
+        hideFlash();
+      }
+
+      if (knifeRoot && knifeSpinGroup && s !== null) {
+        knifeRoot.visible = true;
+        knifeRoot.position.set(0, knifeY(s), 0);
+
+        // One full spin on entry, locking straight vertical (tip down)
+        const remainingSpin = remainingSpinAt(s);
+        knifeSpinGroup.rotation.z = remainingSpin * Math.PI * 2;
+        knifeSpinGroup.rotation.x = Math.sin(remainingSpin * Math.PI) * 0.3;
+
+        // Slow turn in slow-mo, fast turn on the beat, then keeps turning as it falls away
+        knifeYawGroup.rotation.y = knifeYawAt(s);
+
+        updateBladeImage(s);
+        updateGlint(s);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
